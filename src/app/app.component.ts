@@ -1,6 +1,7 @@
+// src/app/app.component.ts
 import { Component, OnInit, signal, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { RouterOutlet, Router } from '@angular/router';
+import { RouterOutlet, Router, NavigationEnd } from '@angular/router';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatListModule } from '@angular/material/list';
 import { MatIconModule } from '@angular/material/icon';
@@ -12,6 +13,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { KeycloakService } from 'keycloak-angular';
 import { RouterModule } from '@angular/router';
+import { filter, take } from 'rxjs/operators';
 
 interface MenuItem {
   label: string;
@@ -22,9 +24,9 @@ interface MenuItem {
 }
 
 interface Currency {
-  icon: string;
-  value: number;
   label: string;
+  icon: string;
+  value: string;
   class: string;
 }
 
@@ -51,15 +53,8 @@ interface Currency {
 export class AppComponent implements OnInit {
   title = 'raptorfrontend';
   isMinimized = signal(false);
-  isMobile = signal(false);
-  isDrawerOpen = signal(false);
   userProfile: any = {};
-  
-  currencies: Currency[] = [
-    { icon: 'toll', value: 1234, label: 'NP', class: 'np' },
-    { icon: 'favorite', value: 5, label: 'Vidas', class: 'vidas' },
-    { icon: 'science', value: 89, label: 'DNA', class: 'dna' }
-  ];
+  private drawerOpen = signal(false);
   
   menuItems: MenuItem[] = [
     {
@@ -89,35 +84,70 @@ export class AppComponent implements OnInit {
     }
   ];
 
+  currencies: Currency[] = [
+    { label: 'Dinheiro Legacy', icon: 'monetization_on', value: '1,234', class: 'legacy-currency' },
+    { label: 'Dinheiro Evrima', icon: 'account_balance_wallet', value: '5,678', class: 'evrima-currency' },
+    { label: 'Pontos', icon: 'stars', value: '91', class: 'points-currency' }
+  ];
+
   constructor(
     private keycloakService: KeycloakService,
     private router: Router
-  ) {
-    this.checkScreenSize();
+  ) {}
+
+  async ngOnInit() {
+    console.log('🚀 AppComponent inicializado');
+    
+    if (this.keycloakService.isLoggedIn()) {
+      this.userProfile = await this.keycloakService.loadUserProfile();
+      console.log('👤 Usuário logado:', this.userProfile.username);
+    }
+    
+    // ✅ CORREÇÃO CRÍTICA: Aguardar navegação inicial completar
+    // Evita interferir com steam-callback
+    setTimeout(() => {
+      const currentUrl = this.router.url;
+      console.log('📍 Verificando rota após inicialização:', currentUrl);
+      
+      // Só redireciona para /home se realmente estiver na rota raiz
+      // E NÃO for steam-callback ou outras rotas especiais
+      if (currentUrl === '/' || currentUrl === '') {
+        console.log('🏠 Redirecionando para /home (rota raiz)');
+        this.router.navigate(['/home']);
+      } else {
+        console.log('🎯 Mantendo rota atual:', currentUrl);
+      }
+    }, 100); // Pequeno delay para permitir navegação inicial
   }
 
   @HostListener('window:resize', ['$event'])
   onResize(event: any) {
-    this.checkScreenSize();
+    // Handle window resize if needed
   }
 
-  private checkScreenSize() {
-    this.isMobile.set(window.innerWidth <= 768);
-    if (this.isMobile()) {
-      this.isDrawerOpen.set(false);
-    }
+  isMobile(): boolean {
+    return window.innerWidth <= 768;
   }
 
-  async ngOnInit() {
-    if (this.keycloakService.isLoggedIn()) {
-      this.userProfile = await this.keycloakService.loadUserProfile();
-    }
-    this.router.navigate(['/home']);
+  isDesktop(): boolean {
+    return window.innerWidth > 768;
+  }
+
+  isDrawerOpen(): boolean {
+    return this.drawerOpen();
+  }
+
+  shouldShowCurrenciesInSidebar(): boolean {
+    return this.isMobile();
+  }
+
+  shouldShowCurrenciesInToolbar(): boolean {
+    return !this.isMobile();
   }
 
   toggleSidebar() {
     if (this.isMobile()) {
-      this.isDrawerOpen.update(value => !value);
+      this.drawerOpen.update(value => !value);
     } else {
       this.isMinimized.update(value => !value);
     }
@@ -125,7 +155,7 @@ export class AppComponent implements OnInit {
 
   closeMobileDrawer() {
     if (this.isMobile()) {
-      this.isDrawerOpen.set(false);
+      this.drawerOpen.set(false);
     }
   }
 
@@ -142,17 +172,5 @@ export class AppComponent implements OnInit {
 
   logout() {
     this.keycloakService.logout();
-  }
-
-  shouldShowCurrenciesInToolbar(): boolean {
-    return !this.isMobile(); // Sempre mostra no desktop, nunca no mobile
-  }
-  
-  shouldShowCurrenciesInSidebar(): boolean {
-    return this.isMobile(); // Mostra na sidebar apenas no mobile
-  }
-  
-  isDesktop(): boolean {
-    return !this.isMobile();
   }
 }
