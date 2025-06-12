@@ -1,27 +1,22 @@
-// src/app/services/steam-auth.service.ts
 import { Injectable } from '@angular/core';
 import { HttpClient, HttpHeaders } from '@angular/common/http';
+import { Observable, from, throwError } from 'rxjs';
+import { map, catchError, switchMap } from 'rxjs/operators';
 import { KeycloakService } from 'keycloak-angular';
-import { Observable } from 'rxjs';
-import { timeout, catchError, throwError } from 'rxjs';
+
+export interface UserSteamID {
+  steamid64: string;
+  is_default: boolean;
+  linked_at: string;
+}
+
+export interface SteamIDsResponse {
+  steam_ids: UserSteamID[];
+  message?: string;
+}
 
 export interface SteamLoginResponse {
   steam_login_url: string;
-}
-
-export interface SteamVerifyRequest {
-  openid_params: {
-    'openid.ns'?: string;
-    'openid.mode'?: string;
-    'openid.op_endpoint'?: string;
-    'openid.claimed_id'?: string;
-    'openid.identity'?: string;
-    'openid.return_to'?: string;
-    'openid.response_nonce'?: string;
-    'openid.assoc_handle'?: string;
-    'openid.signed'?: string;
-    'openid.sig'?: string;
-  };
 }
 
 export interface SteamVerifyResponse {
@@ -34,8 +29,8 @@ export interface SteamVerifyResponse {
 @Injectable({
   providedIn: 'root'
 })
-export class SteamAuthService {
-  private readonly baseUrl = 'http://localhost:5000'; // ← AJUSTE CONFORME SEU BACKEND
+export class SteamService {
+  private apiUrl = '/api';
 
   constructor(
     private http: HttpClient,
@@ -43,208 +38,223 @@ export class SteamAuthService {
   ) {}
 
   /**
-   * 1️⃣ PRIMEIRA CHAMADA: Solicita URL de login do Steam
+   * Obtém headers de autenticação de forma assíncrona
    */
-  async getSteamLoginUrl(): Promise<Observable<SteamLoginResponse>> {
-    console.log('🚀 [1/2] Solicitando URL de login Steam...');
-    
-    const headers = await this.getAuthHeaders();
-    const redirectUri = `${window.location.origin}/steam-callback`;
-    
-    console.log('📍 Redirect URI configurado:', redirectUri);
-    console.log('🔗 Chamando:', `${this.baseUrl}/api/auth/steam_url`);
-    
-    return this.http.get<SteamLoginResponse>(
-      `${this.baseUrl}/api/auth/steam_url?redirect_uri=${encodeURIComponent(redirectUri)}`,
-      { headers }
-    ).pipe(
-      timeout(10000), // 10 segundos timeout
-      catchError(error => {
-        console.error('❌ Erro ao obter URL Steam:', error);
-        return throwError(() => this.handleHttpError(error));
-      })
-    );
-  }
-
-  /**
-   * 2️⃣ SEGUNDA CHAMADA: Verifica dados Steam e associa à conta
-   */
-  async verifySteamLogin(openidParams: any): Promise<Observable<SteamVerifyResponse>> {
-    console.log('🔄 [2/2] Verificando dados Steam no backend...');
-    
-    const headers = await this.getAuthHeaders();
-    const body: SteamVerifyRequest = {
-      openid_params: openidParams
-    };
-
-    console.log('📤 Enviando dados para:', `${this.baseUrl}/api/auth/steam_verify`);
-    console.log('📋 Parâmetros OpenID:', Object.keys(openidParams).length, 'parâmetros');
-    console.log('🔑 Parâmetros principais:', {
-      mode: openidParams['openid.mode'],
-      identity: openidParams['openid.identity'] ? 'presente' : 'ausente',
-      sig: openidParams['openid.sig'] ? 'presente' : 'ausente'
-    });
-
-    return this.http.post<SteamVerifyResponse>(
-      `${this.baseUrl}/api/auth/steam_verify`,
-      body,
-      { 
-        headers,
-        timeout: 15000 // 15 segundos timeout
-      }
-    ).pipe(
-      catchError(error => {
-        console.error('❌ Erro na verificação Steam:', error);
-        return throwError(() => this.handleHttpError(error));
-      })
-    );
-  }
-
-  /**
-   * Extrai parâmetros OpenID da URL
-   */
-  extractOpenIDParams(url: string): any {
-    console.log('🔍 Extraindo parâmetros OpenID da URL...');
-    
-    const urlObj = new URL(url);
-    const params: any = {};
-    
-    urlObj.searchParams.forEach((value, key) => {
-      if (key.startsWith('openid.')) {
-        params[key] = value;
-      }
-    });
-    
-    console.log('📋 Parâmetros OpenID extraídos:', {
-      total: Object.keys(params).length,
-      params: Object.keys(params),
-      hasIdentity: !!params['openid.identity'],
-      hasMode: !!params['openid.mode'],
-      hasSig: !!params['openid.sig']
-    });
-    
-    return params;
-  }
-
-  /**
-   * Inicia o processo de login do Steam
-   */
-  async startSteamLogin(): Promise<void> {
-    console.log('🚀 Iniciando processo de login Steam...');
-    
-    try {
-      const response = await this.getSteamLoginUrl();
-      
-      return new Promise((resolve, reject) => {
-        const subscription = response.subscribe({
-          next: (data) => {
-            console.log('✅ [1/2] URL de login Steam recebida!');
-            console.log('🔗 URL Steam:', data.steam_login_url);
-            console.log('🔄 Redirecionando para Steam...');
-            
-            // Redireciona para a URL do Steam
-            window.location.href = data.steam_login_url;
-            subscription.unsubscribe();
-            resolve();
-          },
-          error: (error) => {
-            console.error('❌ [1/2] Erro ao obter URL de login:', error);
-            subscription.unsubscribe();
-            reject(error);
-          }
-        });
-      });
-    } catch (error) {
-      console.error('❌ Erro no login Steam:', error);
-      throw error;
-    }
-  }
-
-  /**
-   * Processa o callback do Steam (chamado pelo SteamCallbackComponent)
-   */
-  async processSteamCallback(currentUrl: string): Promise<SteamVerifyResponse> {
-    console.log('🔄 Processando callback Steam...');
-    
-    const openidParams = this.extractOpenIDParams(currentUrl);
-    
-    if (Object.keys(openidParams).length === 0) {
-      console.error('❌ Nenhum parâmetro OpenID encontrado na URL');
-      throw new Error('Parâmetros OpenID não encontrados na URL');
-    }
-
-    // Validar parâmetros obrigatórios
-    const requiredParams = ['openid.mode', 'openid.identity', 'openid.sig'];
-    const missingParams = requiredParams.filter(param => !openidParams[param]);
-    
-    if (missingParams.length > 0) {
-      console.error('❌ Parâmetros OpenID obrigatórios ausentes:', missingParams);
-      throw new Error(`Parâmetros OpenID obrigatórios ausentes: ${missingParams.join(', ')}`);
-    }
-
-    try {
-      console.log('📤 [2/2] Enviando parâmetros para verificação no backend...');
-      const response = await this.verifySteamLogin(openidParams);
-      
-      return new Promise((resolve, reject) => {
-        const subscription = response.subscribe({
-          next: (data) => {
-            console.log('✅ [2/2] Verificação Steam concluída com sucesso!');
-            console.log('🎉 Resultado:', data);
-            subscription.unsubscribe();
-            resolve(data);
-          },
-          error: (error) => {
-            console.error('❌ [2/2] Erro na verificação Steam:', error);
-            subscription.unsubscribe();
-            reject(error);
-          }
-        });
-      });
-    } catch (error) {
-      console.error('❌ Erro ao verificar login Steam:', error);
-      throw error;
-    }
-  }
-
   private async getAuthHeaders(): Promise<HttpHeaders> {
     try {
+      const isLoggedIn = await this.keycloakService.isLoggedIn();
+      if (!isLoggedIn) {
+        throw new Error('Usuário não autenticado');
+      }
+
       const token = await this.keycloakService.getToken();
-      console.log('🎫 Token obtido para autenticação');
-      
+      if (!token) {
+        throw new Error('Token de autenticação não encontrado');
+      }
+
       return new HttpHeaders({
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       });
     } catch (error) {
-      console.error('❌ Erro ao obter token de autenticação:', error);
-      throw new Error('Falha na autenticação');
+      console.error('❌ Erro ao obter headers de autenticação:', error);
+      throw error;
     }
   }
 
-  private handleHttpError(error: any): Error {
-    let friendlyMessage = 'Erro desconhecido';
+  /**
+   * Método helper para fazer requisições autenticadas
+   */
+  private makeAuthenticatedRequest<T>(
+    requestFn: (headers: HttpHeaders) => Observable<T>
+  ): Observable<T> {
+    return from(this.getAuthHeaders()).pipe(
+      switchMap(headers => requestFn(headers)),
+      catchError(error => {
+        console.error('❌ Erro na requisição autenticada:', error);
+        
+        if (error.status === 401) {
+          console.log('🔄 Tentando renovar token...');
+          return from(this.keycloakService.updateToken(30)).pipe(
+            switchMap(() => from(this.getAuthHeaders())),
+            switchMap(headers => requestFn(headers)),
+            catchError(renewError => {
+              console.error('❌ Falha ao renovar token:', renewError);
+              this.keycloakService.login();
+              return throwError(renewError);
+            })
+          );
+        }
+        
+        return throwError(error);
+      })
+    );
+  }
+
+  /**
+   * Obtém a URL de login do Steam
+   */
+  getSteamLoginUrl(redirectUri: string): Observable<SteamLoginResponse> {
+    const params = new URLSearchParams({
+      redirect_uri: redirectUri
+    });
     
-    if (error.status === 0) {
-      friendlyMessage = 'Servidor não está respondendo. Verifique se o backend está rodando.';
-    } else if (error.status === 404) {
-      friendlyMessage = 'Serviço de autenticação Steam não encontrado (404).';
-    } else if (error.status === 401) {
-      friendlyMessage = 'Não autorizado. Faça login novamente.';
-    } else if (error.status === 409) {
-      friendlyMessage = 'Este Steam ID já está vinculado a outra conta.';
-    } else if (error.status === 503) {
-      friendlyMessage = 'Falha na comunicação com servidores Steam.';
-    } else if (error.status >= 500) {
-      friendlyMessage = 'Erro interno do servidor. Tente novamente.';
-    } else if (error.name === 'TimeoutError') {
-      friendlyMessage = 'Tempo limite excedido. Servidor pode estar sobrecarregado.';
-    } else if (error.error?.error) {
-      friendlyMessage = error.error.error;
-    } else if (error.message) {
-      friendlyMessage = error.message;
+    return this.http.get<SteamLoginResponse>(
+      `${this.apiUrl}/auth/steam_url?${params.toString()}`
+    );
+  }
+
+  /**
+   * Verifica os dados de retorno do Steam e associa à conta do usuário
+   */
+  verifySteamLogin(openidParams: any): Observable<SteamVerifyResponse> {
+    const request = {
+      openid_params: openidParams
+    };
+
+    return this.makeAuthenticatedRequest<SteamVerifyResponse>(
+      (headers) => this.http.post<SteamVerifyResponse>(
+        `${this.apiUrl}/auth/steam_verify`,
+        request,
+        { headers }
+      )
+    );
+  }
+
+  /**
+   * Processa o callback completo do Steam
+   */
+  processSteamCallback(fullUrl: string): Observable<SteamVerifyResponse> {
+    const openidParams = this.extractOpenIDParamsFromUrl(fullUrl);
+    if (!openidParams) {
+      return throwError(new Error('Parâmetros OpenID não encontrados na URL'));
+    }
+    return this.verifySteamLogin(openidParams);
+  }
+
+  /**
+   * Lista os SteamIDs associados ao usuário atual
+   */
+  getUserSteamIDs(): Observable<UserSteamID[]> {
+    console.log('🔍 Buscando SteamIDs do usuário...');
+    
+    return this.makeAuthenticatedRequest<SteamIDsResponse>(
+      (headers) => {
+        console.log('📤 Fazendo requisição para /user/steam_ids');
+        return this.http.get<SteamIDsResponse>(
+          `${this.apiUrl}/user/steam_ids`,
+          { headers }
+        );
+      }
+    ).pipe(
+      map(response => {
+        console.log('✅ Resposta recebida:', response);
+        return response.steam_ids || [];
+      }),
+      catchError(error => {
+        console.error('❌ Erro ao buscar SteamIDs:', error);
+        return throwError(error);
+      })
+    );
+  }
+
+  /**
+   * Remove a associação de um SteamID
+   */
+  removeSteamID(steamId: string): Observable<{ message: string }> {
+    return this.makeAuthenticatedRequest<{ message: string }>(
+      (headers) => this.http.delete<{ message: string }>(
+        `${this.apiUrl}/user/steam_ids/${steamId}`,
+        { headers }
+      )
+    );
+  }
+
+  /**
+   * Define um SteamID como padrão
+   */
+  setDefaultSteamID(steamId: string): Observable<{ message: string }> {
+    return this.makeAuthenticatedRequest<{ message: string }>(
+      (headers) => this.http.get<{ message: string }>(
+        `${this.apiUrl}/user/steamid/${steamId}/set_default`,
+        { headers }
+      )
+    );
+  }
+
+  /**
+   * Extrai parâmetros OpenID da URL atual
+   */
+  extractOpenIDParams(): any | null {
+    return this.extractOpenIDParamsFromUrl(window.location.href);
+  }
+
+  /**
+   * Extrai parâmetros OpenID de uma URL específica
+   */
+  extractOpenIDParamsFromUrl(url: string): any | null {
+    try {
+      const urlObj = new URL(url);
+      const urlParams = urlObj.searchParams;
+      
+      if (!urlParams.has('openid.mode')) {
+        return null;
+      }
+
+      const openidParams: any = {};
+      const expectedParams = [
+        'openid.ns', 'openid.mode', 'openid.op_endpoint',
+        'openid.claimed_id', 'openid.identity', 'openid.return_to',
+        'openid.response_nonce', 'openid.assoc_handle', 'openid.signed', 'openid.sig'
+      ];
+
+      expectedParams.forEach(param => {
+        const value = urlParams.get(param);
+        if (value) {
+          openidParams[param] = value;
+        }
+      });
+
+      return Object.keys(openidParams).length > 0 ? openidParams : null;
+    } catch (error) {
+      console.error('Erro ao extrair parâmetros OpenID:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Limpa parâmetros OpenID da URL
+   */
+  clearUrlParams(): void {
+    const url = new URL(window.location.href);
+    const searchParams = new URLSearchParams(url.search);
+    
+    for (const [key] of searchParams.entries()) {
+      if (key.startsWith('openid.')) {
+        searchParams.delete(key);
+      }
     }
     
-    return new Error(friendlyMessage);
+    const newUrl = url.pathname + (searchParams.toString() ? '?' + searchParams.toString() : '');
+    window.history.replaceState({}, '', newUrl);
+  }
+
+  /**
+   * Método para debug - verifica se o usuário está autenticado
+   */
+  async checkAuthStatus(): Promise<void> {
+    try {
+      const isLoggedIn = await this.keycloakService.isLoggedIn();
+      const token = await this.keycloakService.getToken();
+      const userProfile = await this.keycloakService.loadUserProfile();
+      
+      console.log('🔍 Status de Autenticação:');
+      console.log('  - Logado:', isLoggedIn);
+      console.log('  - Token existe:', !!token);
+      console.log('  - Username:', userProfile.username);
+      console.log('  - Token (primeiros 50 chars):', token?.substring(0, 50) + '...');
+    } catch (error) {
+      console.error('❌ Erro ao verificar status de autenticação:', error);
+    }
   }
 }

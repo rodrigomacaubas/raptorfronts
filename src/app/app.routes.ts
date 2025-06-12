@@ -1,17 +1,8 @@
-// src/app/app.routes.ts
 import { Routes } from '@angular/router';
 import { AuthGuard } from './guards/auth.guard';
 
 export const routes: Routes = [
   { path: '', redirectTo: '/home', pathMatch: 'full' },
-  
-  {
-    path: 'steam-callback',
-    loadComponent: () =>
-      import('./components/auth/steam-callback/steam-callback.component').then(m => m.SteamCallbackComponent)
-  },
-
-  
   {
     path: 'home',
     loadComponent: () => import('./components/home/home.component').then(m => m.HomeComponent),
@@ -20,6 +11,11 @@ export const routes: Routes = [
   {
     path: 'profile',
     loadComponent: () => import('./components/profile/profile.component').then(m => m.ProfileComponent),
+    canActivate: [AuthGuard]
+  },
+  {
+    path: 'steam-association',
+    loadComponent: () => import('./components/steam-association/steam-association.component').then(m => m.SteamAssociationComponent),
     canActivate: [AuthGuard]
   },
   {
@@ -53,4 +49,3 @@ export const routes: Routes = [
     canActivate: [AuthGuard]
   }
 ];
-

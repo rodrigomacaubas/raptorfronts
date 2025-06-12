@@ -1,4 +1,3 @@
-// src/app/components/profile/profile.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, FormGroup, Validators, ReactiveFormsModule } from '@angular/forms';
@@ -15,7 +14,7 @@ import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatChipsModule } from '@angular/material/chips';
 import { KeycloakService } from 'keycloak-angular';
-import { SteamAuthService } from '../../../services/steam-auth.service';
+import { SteamProfileWidgetComponent } from '../steam-profile-widget/steam-profile-widget.component';
 
 interface UserAddress {
   id?: string;
@@ -39,20 +38,10 @@ interface UserPhone {
   selector: 'app-profile',
   standalone: true,
   imports: [
-    CommonModule, 
-    ReactiveFormsModule, 
-    MatCardModule, 
-    MatIconModule, 
-    MatButtonModule, 
-    MatListModule, 
-    MatTabsModule, 
-    MatFormFieldModule,
-    MatInputModule, 
-    MatSelectModule, 
-    MatDialogModule, 
-    MatSnackBarModule,
-    MatTableModule, 
-    MatChipsModule
+    CommonModule, ReactiveFormsModule, MatCardModule, MatIconModule, 
+    MatButtonModule, MatListModule, MatTabsModule, MatFormFieldModule,
+    MatInputModule, MatSelectModule, MatDialogModule, MatSnackBarModule,
+    MatTableModule, MatChipsModule, SteamProfileWidgetComponent
   ],
   template: `
     <div class="profile-container">
@@ -99,60 +88,7 @@ interface UserPhone {
         <!-- Tab Steam -->
         <mat-tab label="Steam">
           <div class="tab-content">
-            <mat-card class="steam-card">
-              <mat-card-header>
-                <mat-icon mat-card-avatar class="steam-avatar">sports_esports</mat-icon>
-                <mat-card-title>Steam Integration</mat-card-title>
-                <mat-card-subtitle>Conecte sua conta Steam</mat-card-subtitle>
-              </mat-card-header>
-              
-              <mat-card-content>
-                <p class="steam-description">
-                  Conecte sua conta Steam para acessar recursos do jogo e sincronizar dados.
-                </p>
-                
-                <div class="steam-status" *ngIf="!connectingSteam">
-                  <mat-icon class="status-icon">info</mat-icon>
-                  <span>Nenhuma conta Steam conectada</span>
-                </div>
-                
-                <div class="steam-status connecting" *ngIf="connectingSteam">
-                  <mat-icon class="status-icon loading">sync</mat-icon>
-                  <span>Conectando com Steam...</span>
-                </div>
-              </mat-card-content>
-              
-              <mat-card-actions>
-                <button mat-raised-button 
-                        class="steam-connect-btn"
-                        (click)="connectSteam()" 
-                        [disabled]="connectingSteam">
-                  <mat-icon>{{ connectingSteam ? 'sync' : 'link' }}</mat-icon>
-                  {{ connectingSteam ? 'Conectando...' : 'Conectar Steam' }}
-                </button>
-                
-                <button mat-button color="primary">
-                  <mat-icon>help</mat-icon>
-                  Como funciona?
-                </button>
-              </mat-card-actions>
-            </mat-card>
-            
-            <!-- Informações sobre Steam -->
-            <mat-card class="info-card">
-              <mat-card-header>
-                <mat-icon mat-card-avatar>info</mat-icon>
-                <mat-card-title>Sobre a Integração Steam</mat-card-title>
-              </mat-card-header>
-              <mat-card-content>
-                <ul>
-                  <li>Conecte sua conta Steam de forma segura via OpenID</li>
-                  <li>Sincronize automaticamente dados do jogo</li>
-                  <li>Acesse recursos exclusivos para jogadores</li>
-                  <li>Você pode desconectar a qualquer momento</li>
-                </ul>
-              </mat-card-content>
-            </mat-card>
+            <app-steam-profile-widget></app-steam-profile-widget>
           </div>
         </mat-tab>
 
@@ -387,83 +323,6 @@ interface UserPhone {
       border-radius: 50%;
     }
     
-    /* Estilos Steam */
-    .steam-card {
-      background: linear-gradient(135deg, #1b2838, #2a475e);
-      color: white;
-      margin-bottom: 24px;
-    }
-    
-    .steam-card mat-card-title {
-      color: white;
-    }
-    
-    .steam-card mat-card-subtitle {
-      color: #c7d5e0;
-    }
-    
-    .steam-avatar {
-      background: #66c0f4;
-      color: #1b2838;
-    }
-    
-    .steam-description {
-      color: #c7d5e0;
-      margin-bottom: 16px;
-    }
-    
-    .steam-status {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 12px;
-      background: rgba(255, 255, 255, 0.1);
-      border-radius: 4px;
-      margin-bottom: 16px;
-    }
-    
-    .steam-status.connecting {
-      background: rgba(102, 192, 244, 0.2);
-    }
-    
-    .status-icon {
-      color: #c7d5e0;
-    }
-    
-    .status-icon.loading {
-      animation: spin 1s linear infinite;
-      color: #66c0f4;
-    }
-    
-    .steam-connect-btn {
-      background: #66c0f4;
-      color: #1b2838;
-    }
-    
-    .steam-connect-btn:hover {
-      background: #4a9eff;
-    }
-    
-    .info-card {
-      background: #f8f9fa;
-      border: 1px solid #e9ecef;
-    }
-    
-    .info-card ul {
-      margin: 0;
-      padding-left: 20px;
-    }
-    
-    .info-card li {
-      margin: 8px 0;
-      color: #666;
-    }
-    
-    @keyframes spin {
-      from { transform: rotate(0deg); }
-      to { transform: rotate(360deg); }
-    }
-    
     h1 {
       background: linear-gradient(45deg, #ff6600, #b71c1c);
       -webkit-background-clip: text;
@@ -563,7 +422,7 @@ interface UserPhone {
         padding: 16px 0;
       }
 
-      .profile-card, .steam-card {
+      .profile-card {
         margin-bottom: 16px;
       }
     }
@@ -590,7 +449,6 @@ interface UserPhone {
 })
 export class ProfileComponent implements OnInit {
   userProfile: any = {};
-  connectingSteam = false;
   
   addresses: UserAddress[] = [
     {
@@ -625,8 +483,7 @@ export class ProfileComponent implements OnInit {
   constructor(
     private keycloakService: KeycloakService,
     private fb: FormBuilder,
-    private snackBar: MatSnackBar,
-    private steamAuthService: SteamAuthService
+    private snackBar: MatSnackBar
   ) {
     this.addressForm = this.fb.group({
       address_line1: ['', Validators.required],
@@ -653,26 +510,6 @@ export class ProfileComponent implements OnInit {
     const firstName = this.userProfile.firstName || '';
     const lastName = this.userProfile.lastName || '';
     return (firstName.charAt(0) + lastName.charAt(0)).toUpperCase();
-  }
-
-  // Steam Methods
-  async connectSteam() {
-    if (this.connectingSteam) return;
-    
-    try {
-      this.connectingSteam = true;
-      console.log('🚀 Iniciando conexão Steam...');
-      
-      await this.steamAuthService.startSteamLogin();
-      
-    } catch (error: any) {
-      this.connectingSteam = false;
-      console.error('❌ Erro ao conectar Steam:', error);
-      
-      this.snackBar.open(error.message || 'Erro ao conectar Steam', 'Fechar', {
-        duration: 5000
-      });
-    }
   }
 
   // Address Methods

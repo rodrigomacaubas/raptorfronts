@@ -1,4 +1,3 @@
-// src/app/components/auth/steam-callback/steam-callback.component.ts
 import { Component, OnInit } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router } from '@angular/router';
@@ -7,7 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { SteamAuthService, SteamVerifyResponse } from '../../services/steam-auth.service';
+import { SteamService, SteamVerifyResponse } from '../../../../services/steam-auth.service';
 
 @Component({
   selector: 'app-steam-callback',
@@ -256,14 +255,12 @@ export class SteamCallbackComponent implements OnInit {
 
   constructor(
     private router: Router,
-    private steamAuthService: SteamAuthService,
+    private steamService: SteamService,
     private snackBar: MatSnackBar
   ) {}
 
   ngOnInit(): void {
-    console.log('🎯 ==========================================');
-    console.log('🎯 STEAM CALLBACK COMPONENT CARREGADO!');
-    console.log('🎯 ==========================================');
+    console.log('🎯 Steam Callback Component carregado!');
     
     this.currentUrl = window.location.href;
     console.log('📍 URL atual:', this.currentUrl);
@@ -275,7 +272,6 @@ export class SteamCallbackComponent implements OnInit {
     try {
       this.currentStatus = 'Verificando URL...';
       
-      // Verifica se é realmente um callback do Steam
       if (!this.isSteamCallback(this.currentUrl)) {
         console.error('❌ URL não é um callback válido do Steam');
         this.showError(
@@ -289,7 +285,6 @@ export class SteamCallbackComponent implements OnInit {
       console.log('✅ URL identificada como callback Steam válido');
       this.currentStatus = 'Extraindo parâmetros...';
       
-      // Contar parâmetros OpenID
       const urlObj = new URL(this.currentUrl);
       this.openidCount = Array.from(urlObj.searchParams.keys())
         .filter(key => key.startsWith('openid.')).length;
@@ -298,61 +293,63 @@ export class SteamCallbackComponent implements OnInit {
       
       this.currentStatus = 'Processando no backend...';
 
-      // Processa o callback
-      const result: SteamVerifyResponse = await this.steamAuthService.processSteamCallback(this.currentUrl);
-      
-      console.log('✅ Callback processado com sucesso:', result);
-      
-      this.loading = false;
-      this.success = true;
-      this.steamResult = result;
-      
-      // Define mensagem baseada no status
-      switch (result.status) {
-        case 'created':
-          this.successMessage = `Steam ID ${result.steamid64} foi associado à sua conta com sucesso!`;
-          if (result.is_default) {
-            this.successMessage += ' Este é agora seu Steam ID padrão.';
+      this.steamService.processSteamCallback(this.currentUrl).subscribe({
+        next: (result) => {
+          console.log('✅ Callback processado com sucesso:', result);
+          
+          this.loading = false;
+          this.success = true;
+          this.steamResult = result;
+          
+          switch (result.status) {
+            case 'created':
+              this.successMessage = `Steam ID ${result.steamid64} foi associado à sua conta com sucesso!`;
+              if (result.is_default) {
+                this.successMessage += ' Este é agora seu Steam ID padrão.';
+              }
+              break;
+            case 'existing':
+              this.successMessage = `Steam ID ${result.steamid64} já estava associado à sua conta.`;
+              break;
+            case 'conflict':
+              this.showError(
+                'Steam ID já vinculado',
+                'Este Steam ID já está vinculado a outra conta.',
+                result.message
+              );
+              return;
           }
-          break;
-        case 'existing':
-          this.successMessage = `Steam ID ${result.steamid64} já estava associado à sua conta.`;
-          break;
-        case 'conflict':
-          this.showError(
-            'Steam ID já vinculado',
-            'Este Steam ID já está vinculado a outra conta.',
-            result.message
-          );
-          return;
-      }
 
-      // Mostra notificação de sucesso
-      this.snackBar.open(result.message, 'Fechar', {
-        duration: 5000,
-        panelClass: ['success-snackbar']
+          this.snackBar.open(result.message, 'Fechar', {
+            duration: 5000,
+            panelClass: ['success-snackbar']
+          });
+
+          setTimeout(() => {
+            this.redirectToProfile();
+          }, 5000);
+        },
+        error: (error) => {
+          console.error('❌ Erro no callback Steam:', error);
+          
+          let message = 'Erro desconhecido ao processar autenticação Steam';
+          let technical = '';
+          
+          if (error?.message) {
+            message = error.message;
+            technical = error.message;
+          } else if (error?.error?.error) {
+            message = error.error.error;
+            technical = JSON.stringify(error.error);
+          }
+
+          this.showError('Falha na autenticação Steam', message, technical);
+        }
       });
 
-      // Redireciona automaticamente após 5 segundos
-      setTimeout(() => {
-        this.redirectToProfile();
-      }, 5000);
-
     } catch (error: any) {
-      console.error('❌ Erro no callback Steam:', error);
-      
-      let message = 'Erro desconhecido ao processar autenticação Steam';
-      let technical = '';
-      
-      if (error?.message) {
-        message = error.message;
-        technical = error.message;
-      } else if (error?.error?.error) {
-        message = error.error.error;
-        technical = JSON.stringify(error.error);
-      }
-
-      this.showError('Falha na autenticação Steam', message, technical);
+      console.error('❌ Erro no processamento:', error);
+      this.showError('Erro interno', error.message || 'Erro desconhecido', error.toString());
     }
   }
 
