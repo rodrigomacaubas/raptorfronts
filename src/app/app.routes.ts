@@ -15,8 +15,7 @@ export const routes: Routes = [
   },
   {
     path: 'steam-association',
-    loadComponent: () => import('./components/steam-association/steam-association.component').then(m => m.SteamAssociationComponent),
-    canActivate: [AuthGuard]
+    loadComponent: () => import('./components/steam-association/steam-association.component').then(m => m.SteamAssociationComponent)
   },
   {
     path: 'slotslegacy',
